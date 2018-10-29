@@ -1,4 +1,8 @@
 ﻿using System;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Linq.Expressions;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -6,6 +10,7 @@ using System.Threading;
 
 namespace ConsoleApp1
 {
+    
 // State object for reading client data asynchronously  
     public class StateObject {  
         // Client  socket.  
@@ -14,8 +19,10 @@ namespace ConsoleApp1
         public const int BufferSize = 1024;  
         // Receive buffer.  
         public byte[] buffer = new byte[BufferSize];  
-// Received data string.  
+        // Received data string.  
         public StringBuilder sb = new StringBuilder();    
+        // Add our stopwatch
+        public Stopwatch Stopwatch = new Stopwatch();
     }  
 
     public class AsynchronousSocketListener {  
@@ -76,9 +83,12 @@ namespace ConsoleApp1
 
             // Create the state object.  
             StateObject state = new StateObject();  
+            state.Stopwatch.Start();
             state.workSocket = handler;  
             handler.BeginReceive( state.buffer, 0, StateObject.BufferSize, 0,  
                 new AsyncCallback(ReadCallback), state);  
+            
+            Console.WriteLine("AcceptCallback completed");
         }  
 
         public static void ReadCallback(IAsyncResult ar) {  
@@ -92,27 +102,41 @@ namespace ConsoleApp1
             // Read data from the client socket.   
             int bytesRead = handler.EndReceive(ar);  
 
-            if (bytesRead > 0) {  
-                // There  might be more data, so store the data received so far.  
-                state.sb.Append(Encoding.ASCII.GetString(  
-                    state.buffer, 0, bytesRead));  
+            
+            state.sb.Append(Encoding.ASCII.GetString(state.buffer, 0, bytesRead));
+            content = state.sb.ToString();
 
-                // Check for end-of-file tag. If it is not there, read   
-                // more data.  
-                content = state.sb.ToString();  
-                if (content.IndexOf("<EOF>") > -1) {  
-                    // All the data has been read from the   
-                    // client. Display it on the console.  
-                    Console.WriteLine("Read {0} bytes from socket. \n Data : {1}",  
-                        content.Length, content );  
-                    // Echo the data back to the client.  
-                    Send(handler, content);  
-                } else {  
-                    // Not all data received. Get more.  
-                    handler.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0,  
-                        new AsyncCallback(ReadCallback), state);  
-                }  
-            }  
+            string send = "";
+            string line;
+            try
+            {
+                using (var streamReader = new StreamReader("Files/" + content + ".txt"))
+                {
+                    line = streamReader.ReadLine();
+                    while (line != null)
+                    {
+                        send += line + "\n";
+                        line = streamReader.ReadLine();
+                    }
+                }
+            }
+            catch (IOException e)
+            {
+                //TODO: send error message back to client, write entry in log
+                send = "File does not exist";
+                Console.WriteLine("File " + content + " does not exist");
+            }
+            
+            // All the data has been read from the   
+            // client. Display it on the console.  
+            Console.WriteLine("Read {0} bytes from socket. \n Data : {1}",  
+                content.Length, content );  
+            // Echo the data back to the client.  
+            Send(handler, send);
+
+            long time = state.Stopwatch.ElapsedMilliseconds;
+
+            File.AppendAllText("Log/log.txt", "IP: " + handler.RemoteEndPoint + " Time:" + time + " File: " + content + ".txt" + Environment.NewLine);
         }  
 
         private static void Send(Socket handler, String data) {  
@@ -121,7 +145,8 @@ namespace ConsoleApp1
 
             // Begin sending the data to the remote device.  
             handler.BeginSend(byteData, 0, byteData.Length, 0,  
-                new AsyncCallback(SendCallback), handler);  
+                new AsyncCallback(SendCallback), handler); 
+            
         }  
 
         private static void SendCallback(IAsyncResult ar) {  
@@ -143,8 +168,7 @@ namespace ConsoleApp1
 
         public static int Main(String[] args) {  
             //FileGenerator.run();
-            StartListening();  
-            Client.RunClient();
+            StartListening(); 
             return 0;  
         }  
     }
