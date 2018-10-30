@@ -48,7 +48,7 @@ namespace ConsoleApp1
             // Bind the socket to the local endpoint and listen for incoming connections.  
             try {  
                 listener.Bind(localEndPoint);  
-                listener.Listen(100);  
+                listener.Listen(100);  //max number of clients
 
                 while (true) {  
                     // Set the event to nonsignaled state.  
@@ -87,8 +87,6 @@ namespace ConsoleApp1
             state.workSocket = handler;  
             handler.BeginReceive( state.buffer, 0, StateObject.BufferSize, 0,  
                 new AsyncCallback(ReadCallback), state);  
-            
-            Console.WriteLine("AcceptCallback completed");
         }  
 
         public static void ReadCallback(IAsyncResult ar) {  
@@ -132,11 +130,12 @@ namespace ConsoleApp1
             Console.WriteLine("Read {0} bytes from socket. \n Data : {1}",  
                 content.Length, content );  
             // Echo the data back to the client.  
+            String clientIp = handler.RemoteEndPoint.ToString();
             Send(handler, send);
 
             long time = state.Stopwatch.ElapsedMilliseconds;
 
-            File.AppendAllText("Log/log.txt", "IP: " + handler.RemoteEndPoint + " Time:" + time + " File: " + content + ".txt" + Environment.NewLine);
+            File.AppendAllText("Log/log.txt", "IP: " + clientIp + " Time:" + time + " File: " + content + ".txt" + Environment.NewLine);
         }  
 
         private static void Send(Socket handler, String data) {  
